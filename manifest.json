@@ -1,0 +1,11 @@
+{
+  "name": "BioScan IA GlowUp",
+  "short_name": "BioScan",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#00f2ff",
+  "icons": [
+    { "src": "https://cdn-icons-png.flaticon.com/512/3067/3067451.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
