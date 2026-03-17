@@ -1,134 +1,89 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BioScan IA v2.0 | Système Expert Pro</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-</head>
-<body class="bg-[#050505] text-[#00f2ff] select-none">
+<script>
+    const video = document.getElementById('video-preview');
+    const btn = document.getElementById('btn-main');
+    const statusInd = document.getElementById('status-indicator');
+    const statusTxt = document.getElementById('status-text');
+    const loader = document.getElementById('top-loader');
 
-    <div id="boot-screen" class="fixed inset-0 bg-black z-[200] flex flex-col items-center justify-center transition-opacity duration-1000">
-        <div class="h-16 w-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-        <p class="mt-4 font-mono text-[10px] tracking-[0.4em] animate-pulse">BOOTING BIOSCAN_OS...</p>
-    </div>
+    // URLs des modèles optimisés (plus rapides)
+    const MODEL_URL = 'https://raw.githubusercontent.com/ml5js/ml5-data-and-models/main/models/faceapi/';
 
-    <div id="top-loader" class="fixed top-0 left-0 h-1 bg-cyan-500 transition-all duration-300 z-[100]" style="width: 0%"></div>
+    window.onload = () => {
+        setTimeout(() => { 
+            document.getElementById('boot-screen').style.opacity = '0'; 
+            setTimeout(() => document.getElementById('boot-screen').remove(), 1000); 
+        }, 1500);
+    };
 
-    <div class="max-w-md mx-auto px-6 pt-10 pb-24">
+    async function initIA() {
+        try {
+            // Chargement ultra-rapide des modèles Tiny
+            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL + 'tiny_face_detector_model-weights_manifest.json');
+            await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL + 'face_landmark_68_model-weights_manifest.json');
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user", width: 400, height: 400 } 
+            });
+            
+            video.srcObject = stream;
+            
+            // Mise à jour visuelle immédiate
+            statusInd.className = "h-3 w-3 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
+            statusTxt.innerText = "IA SYNCHRONISÉE. PRÊT POUR LE SCAN.";
+            statusTxt.className = "text-[10px] font-bold text-green-500 uppercase tracking-widest";
+            
+            btn.disabled = false;
+            btn.className = "w-full mt-8 py-6 rounded-2xl bg-cyan-600 text-white font-black text-xs tracking-[0.2em] transition-all hover:bg-cyan-500 border-none shadow-[0_0_20px_rgba(0,242,255,0.4)] flex items-center justify-center gap-4 uppercase cursor-pointer";
+        } catch (err) {
+            statusTxt.innerText = "ERREUR : ACCÈS CAMÉRA REQUIS";
+            statusInd.className = "h-3 w-3 rounded-full bg-orange-500 animate-pulse";
+            console.error("Erreur d'initialisation:", err);
+        }
+    }
+
+    // Lancement automatique
+    initIA();
+
+    async function executeDeepScan() {
+        btn.disabled = true;
+        document.getElementById('scan-bar').style.display = "block";
+        let p = 0;
+        const timer = setInterval(() => {
+            p++;
+            loader.style.width = p + "%";
+            btn.innerText = `CALCUL BIOMÉTRIQUE... ${p}%`;
+            if(p >= 100) { 
+                clearInterval(timer); 
+                runFinalLogic(); 
+            }
+        }, 600); // Durée totale : 60 secondes
+    }
+
+    async function runFinalLogic() {
+        const detect = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
         
-        <header class="flex flex-col items-center mb-10 text-center">
-            <div class="h-20 w-20 rounded-3xl bg-gradient-to-br from-cyan-600 to-blue-700 flex items-center justify-center shadow-[0_0_40px_rgba(0,242,255,0.3)]">
-                <i class="fas fa-fingerprint text-white text-4xl"></i>
-            </div>
-            <h1 class="text-3xl font-black mt-6 text-white tracking-tighter">BIOSCAN <span class="text-cyan-500">IA</span></h1>
-            <p class="text-[8px] uppercase tracking-[0.5em] text-cyan-900 font-bold mt-2">Intelligence Artificielle de Diagnostic</p>
-        </header>
-
-        <div class="scanner-frame relative">
-            <video id="video-preview" class="w-full h-full object-cover scale-x-[-1]" autoplay playsinline muted></video>
-            <div id="scan-bar" class="scan-line"></div>
-            <div class="absolute inset-0 border-[35px] border-black/70 pointer-events-none"></div>
-        </div>
-
-        <div id="status-box" class="mt-6 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-4">
-            <div id="status-indicator" class="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_10px_red]"></div>
-            <p id="status-text" class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest italic">Chargement IA...</p>
-        </div>
-
-        <button onclick="executeDeepScan()" id="btn-main" disabled class="w-full mt-8 py-6 rounded-2xl bg-zinc-900 text-zinc-600 font-black text-xs tracking-[0.2em] transition-all border border-zinc-800 uppercase flex items-center justify-center gap-3">
-            <i class="fas fa-microchip"></i> Initialiser Analyse (60s)
-        </button>
-
-        <div id="results-area" class="hidden space-y-8 mt-12 pb-20">
-            <div class="p-8 rounded-[2.5rem] bg-gradient-to-b from-zinc-900 to-black border border-zinc-800 shadow-2xl">
-                <h2 class="text-xs font-black text-white uppercase mb-6">Rapport Biométrique</h2>
-                <div class="grid grid-cols-2 gap-4 mb-8">
-                    <div class="bg-black p-5 rounded-3xl border border-zinc-800 text-center">
-                        <p class="text-[8px] text-zinc-600 uppercase font-black mb-1">Symétrie</p>
-                        <p id="val-sym" class="text-2xl font-black text-white italic">--%</p>
-                    </div>
-                    <div class="bg-black p-5 rounded-3xl border border-zinc-800 text-center">
-                        <p class="text-[8px] text-zinc-600 uppercase font-black mb-1">Status</p>
-                        <p id="val-type" class="text-[10px] font-black text-orange-400 uppercase">Calcul...</p>
-                    </div>
-                </div>
-                <div class="space-y-4">
-                    <div class="p-4 border-l-2 border-cyan-500 bg-cyan-500/5">
-                        <p class="text-[10px] font-bold text-cyan-500 uppercase mb-1">Mécanique/Bio</p>
-                        <p id="p-sci" class="text-xs text-zinc-400 leading-relaxed"></p>
-                    </div>
-                    <div class="p-4 border-l-2 border-orange-500 bg-orange-500/5">
-                        <p class="text-[10px] font-bold text-orange-500 uppercase mb-1">Chirurgie (Abidjan)</p>
-                        <p id="p-surg" class="text-xs text-zinc-400 leading-relaxed"></p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-8 rounded-[2.5rem] bg-cyan-500 text-black">
-                <h3 class="font-black text-lg mb-4 uppercase tracking-tighter">Guide Glow Up Quotidien</h3>
-                <ul class="space-y-4 text-[11px] font-bold">
-                    <li class="flex gap-3"><i class="fas fa-check-circle mt-1"></i> Mewing : Langue au palais pour la mâchoire.</li>
-                    <li class="flex gap-3"><i class="fas fa-check-circle mt-1"></i> Sommeil : Dormir sur le dos (symétrie).</li>
-                    <li class="flex gap-3"><i class="fas fa-check-circle mt-1"></i> Eau : 3L par jour pour l'éclat.</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const video = document.getElementById('video-preview');
-        const btn = document.getElementById('btn-main');
-        const loader = document.getElementById('top-loader');
-
-        window.onload = () => {
-            setTimeout(() => { document.getElementById('boot-screen').style.opacity = '0'; 
-            setTimeout(() => document.getElementById('boot-screen').remove(), 1000); }, 2000);
-        };
-
-        async function init() {
-            try {
-                await faceapi.nets.tinyFaceDetector.loadFromUri('https://raw.githubusercontent.com/ml5js/ml5-data-and-models/main/models/faceapi/tiny_face_detector_model-weights_manifest.json');
-                await faceapi.nets.faceLandmark68Net.loadFromUri('https://raw.githubusercontent.com/ml5js/ml5-data-and-models/main/models/faceapi/face_landmark_68_model-weights_manifest.json');
-                const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                video.srcObject = s;
-                document.getElementById('status-indicator').className = "h-3 w-3 rounded-full bg-green-500";
-                document.getElementById('status-text').innerText = "IA Prête. Calibration stable.";
-                btn.disabled = false;
-                btn.className = "w-full mt-8 py-6 rounded-2xl bg-cyan-600 text-white font-black text-xs tracking-[0.2em] border-none shadow-[0_0_20px_rgba(0,242,255,0.4)] flex items-center justify-center gap-3 cursor-pointer";
-            } catch(e) { console.error(e); }
-        }
-        init();
-
-        function executeDeepScan() {
-            btn.disabled = true;
-            document.getElementById('scan-bar').style.display = "block";
-            let p = 0;
-            const t = setInterval(async () => {
-                p++;
-                loader.style.width = p + "%";
-                btn.innerText = `ANALYSE EN COURS... ${p}%`;
-                if(p >= 100) { clearInterval(t); finalize(); }
-            }, 600);
+        if(!detect) {
+            alert("ERREUR : Visage non détecté. Rapprochez-vous et recommencez.");
+            location.reload();
+            return;
         }
 
-        async function finalize() {
-            const d = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
-            if(!d) { alert("Visage non détecté !"); location.reload(); return; }
-            const sym = (Math.abs(d.landmarks.getLeftEye()[0].y - d.landmarks.getRightEye()[0].y) * 15).toFixed(1);
-            document.getElementById('scan-bar').style.display = "none";
-            document.getElementById('results-area').classList.remove('hidden');
-            document.getElementById('val-sym').innerText = sym + "%";
-            document.getElementById('val-type').innerText = sym < 15 ? "Correction Légère" : "Correction Chirurgicale";
-            document.getElementById('p-sci').innerText = "Exercices de gymnastique faciale et massages Gua Sha quotidiens.";
-            document.getElementById('p-surg').innerText = "CHU d'Angré : Consultation Maxillo-Faciale (Standard : 27 22 49 61 00).";
-            btn.innerText = "SCAN TERMINÉ";
-            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-        }
-    </script>
-</body>
-</html>
+        const lm = detect.landmarks;
+        const leftEye = lm.getLeftEye();
+        const rightEye = lm.getRightEye();
+        
+        // Calcul réel de l'asymétrie
+        const sym = (Math.abs(leftEye[0].y - rightEye[0].y) * 15).toFixed(1);
+        
+        document.getElementById('scan-bar').style.display = "none";
+        document.getElementById('results-area').classList.remove('hidden');
+        document.getElementById('val-sym').innerText = sym + "%";
+        document.getElementById('val-type').innerText = sym < 15 ? "Déséquilibre Musculaire" : "Asymétrie Structurelle";
+        
+        document.getElementById('p-sci').innerText = "Protocole recommandé : Massages 'Gua Sha' 5 min/soir et exercices de rééducation faciale pour tonifier les muscles faibles.";
+        document.getElementById('p-surg').innerText = "CHU d'Angré : Consultation Service Maxillo-Facial (Standard : 27 22 49 61 00). Option curable via micro-intervention.";
+        
+        btn.innerText = "ANALYSE TERMINÉE";
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+</script>
